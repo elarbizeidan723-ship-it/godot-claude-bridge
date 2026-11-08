@@ -1,32 +1,35 @@
-extends Node
+const express = require('express');
+const cors = require('cors');
+const app = express();
+app.use(express.json());
+app.use(cors());
 
-# استبدل هذا بالرابط الذي حصلت عليه من موقع Render
-const SERVER_URL = "https://onrender.com"
+// نقطة الاتصال التي ستكلمها من Godot
+app.post('/ask-claude', async (req, res) => {
+    const { prompt } = req.body;
+    
+    try {
+        // الاتصال المباشر بـ API الخاص بـ Anthropic Claude
+        const response = await fetch('https://anthropic.com', {
+            method: 'POST',
+            headers: {
+                'x-api-key': process.env.CLAUDE_API_KEY, // سنضع المفتاح هنا لاحقاً
+                'anthropic-version': '2023-06-01',
+                'content-type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: "claude-3-5-sonnet-20241022",
+                max_tokens: 1024,
+                messages: [{ role: "user", content: prompt }]
+            })
+        });
 
-@onready var http_request = $HTTPRequest
+        const data = await response.json();
+        res.json({ reply: data.content[0].text });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
-func _ready():
-	# ربط إشارة اكتمال الطلب بالدالة المسؤولة عن معالجة النتيجة
-	http_request.request_completed.connect(_on_request_completed)
-	
-	# تجربة إرسال سؤال لكلاود عند تشغيل اللعبة
-	ask_claude("مرحباً كلاود، أنا أكلمك من داخل لعبة Godot على هاتفي!")
-
-func ask_claude(prompt_text: String):
-	var headers = ["Content-Type: application/json"]
-	var body = JSON.stringify({"prompt": prompt_text})
-	
-	# إرسال الطلب للخادم الأونلاين
-	var error = http_request.request(SERVER_URL, headers, HTTPClient.METHOD_POST, body)
-	if error != OK:
-		print("فشل في إرسال الطلب: ", error)
-
-func _on_request_completed(result, response_code, headers, body):
-	if response_code == 200:
-		var json = JSON.parse_string(body.get_string_from_utf8())
-		if json and json.has("reply"):
-			print("رد كلاود: ", json["reply"])
-		else:
-			print("استجابة غير صالحة من الخادم")
-	else:
-		print("خطأ من السيرفر، رمز الاستجابة: ", response_code)
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
